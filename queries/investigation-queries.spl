@@ -1,0 +1,75 @@
+``` MediSure M365 compromise investigation – Splunk queries
+``` Index: medisure | Sourcetypes: medisure:signin, medisuremail, medisureproxy
+``` Time range: All time (data is from 16 Aug 2023)
+
+``` ---------- Phase 1: Visibility ----------
+``` Check all 3 sources loaded and how many events each
+index=medisure | stats count by sourcetype
+
+``` ---------- Phase 2/3: Alerts and triage ----------
+``` Baseline – who logs in from where
+index=medisure sourcetype="medisure:signin" | stats count by user, location, ipAddress, result
+
+``` Dana's logins in time order
+index=medisure sourcetype="medisure:signin" user="dana.prescott*" | table _time user result resultType ipAddress location app device | sort _time
+
+``` ---------- Phase 4: Investigation ----------
+``` Emails Dana received
+index=medisure sourcetype=medisuremail to="dana.prescott*" | table _time from to subject src_ip spf dkim dmarc action | sort _time
+
+``` Dana's web activity (rex pulls out the visited site because Splunk overwrites "host")
+index=medisure sourcetype=medisureproxy user="dana.prescott*" | rex "host=(?<website>\S+)" | table _time src user method website uri status category action | sort _time
+
+``` Pivot on attacker IP across all logs
+index=medisure "89.144.44.41" | table _time sourcetype _raw | sort _time
+
+``` Who else visited the phishing domains
+index=medisure sourcetype=medisureproxy ("accsecurity" OR "thebandalisty") | rex "host=(?<website>\S+)" | table _time user src method website uri | sort _time
+
+``` Emails sent from Dana's account
+index=medisure sourcetype=medisuremail from="dana.prescott*" | table _time from to subject src_ip action | sort _time
+
+``` Internal phishing recipients – sanity check they exist in proxy and when they were active
+index=medisure sourcetype=medisureproxy user IN ("tom.becker","alicia.romero","grace.lin","rachel.obi","daniel.kwon") | stats count min(_time) as first max(_time) as last by user | convert ctime(first) ctime(last)
+
+``` Internal phishing recipients – what they browsed all day
+index=medisure sourcetype=medisureproxy user IN ("tom.becker","alicia.romero","grace.lin","rachel.obi","daniel.kwon") | stats count by user category action
+
+``` Inbox rule search (returned 0 – mail log has no mailbox audit events)
+index=medisure sourcetype=medisuremail (rule OR InboxRule OR "New-InboxRule")
+
+``` Confirm what the mail log actually records
+index=medisure sourcetype=medisuremail | stats count by action
+
+``` ---------- Phase 5: Correlated timeline ----------
+index=medisure ("89.144.44.41" OR "accsecurity" OR "thebandalisty" OR (from="dana.prescott*" subject="*remittance*"))
+| rex "host=(?<website>\S+)"
+| eval event=case(
+    sourcetype="medisuremail" AND match(_raw,"access-accsecurity"), "Phishing email delivered to ".to,
+    sourcetype="medisureproxy" AND method="POST", "Credentials submitted by ".user,
+    sourcetype="medisureproxy", user." visited ".website,
+    sourcetype="medisure:signin", "Login ".result." for ".user." from ".location." (".app.")",
+    sourcetype="medisuremail" AND match(_raw,"remittance"), "Internal phish sent to ".to)
+| table _time sourcetype event
+| sort _time
+
+``` ---------- Phase 12: Detection rules (saved as alerts) ----------
+``` Failed then successful login from a non-US location (T1078.004)
+index=medisure sourcetype="medisure:signin" NOT location="*,US"
+| stats count(eval(result="Failure")) as fails count(eval(result="Success")) as successes values(location) as location by user ipAddress
+| where fails>=3 AND successes>=1
+
+``` DMARC fail but delivered (T1566.002)
+index=medisure sourcetype=medisuremail dmarc=fail action=delivered
+| stats count values(to) as recipients by from src_ip subject
+
+``` Credential POST to newly registered domain (T1566.002)
+index=medisure sourcetype=medisureproxy method=POST category=newly_registered
+| rex "host=(?<website>\S+)"
+| table _time user src website uri
+
+``` Internal email burst – one sender, 5+ recipients in 5 minutes (T1534)
+index=medisure sourcetype=medisuremail from="*@medisurehealthnetwork.com"
+| bin _time span=5m
+| stats dc(to) as recipients values(subject) as subject by _time from
+| where recipients>=5
