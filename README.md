@@ -71,7 +71,7 @@ I followed the 12-phase SOC workflow from the project brief:
 ### 1. Normal login behaviour (baseline)
 Almost every user logs in from New York via `198.51.100.25` (the office's public IP) on corp-managed devices. Occasional single failures are normal typos.
 
-![Sign-in baseline](screenshots/02-signin-baseline.png)
+![Sign-in baseline](02-signin-baseline.png)
 
 ### 2. Dana's account – suspicious logins
 - 00:02 – normal login from New York, corp-managed device
@@ -81,7 +81,7 @@ Almost every user logs in from New York via `198.51.100.25` (the office's public
 
 New York to Amsterdam in 80 minutes = impossible travel.
 
-![Dana sign-in timeline](screenshots/03-dana-signin-timeline.png)
+![Dana sign-in timeline](03-dana-signin-timeline.png)
 
 ### 3. The phishing email
 - From: `no-reply@access-accsecurity.com` (lookalike, not Microsoft)
@@ -90,31 +90,31 @@ New York to Amsterdam in 80 minutes = impossible travel.
 - Sending IP: **89.144.44.41** – the same IP that later logged into Dana's account
 - SPF fail, DKIM none, DMARC fail – **still delivered**
 
-![Phishing email](screenshots/04-phishing-email.png)
+![Phishing email](04-phishing-email.png)
 
 ### 4. It was a campaign, not a one-off
 The same email went to 8 users between 00:11 and 00:20, all delivered.
 
-![Campaign recipients](screenshots/06-phishing-campaign-recipients.png)
+![Campaign recipients](06-phishing-campaign-recipients.png)
 
 ### 5. Click and credential submission
 Proxy logs show Dana (`10.20.11.45`) clicking a tracking link on `thebandalisty.com`, getting redirected to the fake login page on `account-verify.access-accsecurity.com`, then a **POST** to `/session/login` at 01:05 – that's her submitting her password. She was then bounced to the real Microsoft login page so nothing looked wrong.
 
 Marcus Hale and Priya Nandakumar also clicked and reached the fake page, but there's **no POST** for either of them.
 
-![Proxy – who clicked](screenshots/07-proxy-who-clicked.png)
+![Proxy – who clicked](07-proxy-who-clicked.png)
 
 ### 6. Internal phishing from Dana's mailbox
 Two minutes after the attacker opened OWA, Dana's account sent "Updated remittance – please review" to 5 colleagues in 28 seconds. These are the only emails her account sent all day. They went through MediSure's own mail server (`10.20.1.10`) so they passed SPF/DKIM/DMARC.
 
 None of the 5 recipients visited any suspicious sites afterwards (checked their full-day proxy activity).
 
-![Internal phishing](screenshots/08-internal-phishing.png)
+![Internal phishing](08-internal-phishing.png)
 
 ### 7. Correlated view
 One search pulling all three sources into a single timeline:
 
-![Correlated timeline](screenshots/11-correlated-timeline.png)
+![Correlated timeline](11-correlated-timeline.png)
 
 Full timeline: [analysis/timeline.md](analysis/timeline.md)
 All Splunk queries: [queries/investigation-queries.spl](queries/investigation-queries.spl)
@@ -193,7 +193,7 @@ Full write-up and detection ideas: [reports/lessons-learned.md](reports/lessons-
 │   ├── tier2-escalation-note.md
 │   ├── containment-recovery-checklist.md
 │   └── lessons-learned.md
-└── screenshots/
+└── *.png  (screenshots)
 ```
 
 ---
